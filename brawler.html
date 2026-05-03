@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Brawler - 1v1 Duel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e293b;
+            touch-action: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none;
+            padding: 20px;
+            justify-content: space-between;
+            align-items: flex-end;
+            height: 150px;
+            pointer-events: none;
+        }
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex;
+            }
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: bold;
+            font-size: 24px;
+            user-select: none;
+            pointer-events: auto;
+        }
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+        /* Health Bar */
+        .health-bar-container {
+            width: 300px;
+            max-width: 50vw;
+            height: 20px;
+            background-color: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .health-bar-fill {
+            height: 100%;
+            background-color: #ef4444;
+            width: 100%;
+            transition: width 0.2s ease-out;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <!-- Main Menu -->
+        <div id="main-menu" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 pointer-events-auto z-50 p-4">
+            <h1 class="text-5xl md:text-6xl font-black text-white mb-2 tracking-wider text-center" style="text-shadow: 4px 4px 0 #3b82f6;">MATH BRAWL 1v1</h1>
+            <div class="text-gray-300 mb-8 text-center max-w-xl bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                <p class="mb-4 text-lg">Defeat opponents by solving <span class="text-yellow-400 font-bold">Math Problems</span>!</p>
+                <ul class="text-left list-disc pl-6 mb-4 space-y-2 text-sm md:text-base">
+                    <li>Jump <b>(Up/W)</b> and hit the <b>correct answer orb</b> with your racket <b>(Space)</b>.</li>
+                    <li>Press Up/W in mid-air to <b>Double Jump</b>! Press <b>S/Down</b> to bend down and dodge.</li>
+                    <li>Hitting the wrong orb triggers a <b>LIGHTNING STRIKE</b> penalty!</li>
+                    <li>The enemy will shoot slow tennis balls at you. Dodge them!</li>
+                    <li>If time runs out, the <b>game freezes!</b></li>
+                    <li>Choose <b>right</b> while frozen to block the Lightning with a <b>shield</b>, choose <b>wrong</b> to take full damage!</li>
+                </ul>
+                <p class="text-sm text-gray-400 mt-4">Desktop: A/D to move, Up/W to jump, Space to attack, S/Down to bend.<br>Mobile: Use on-screen buttons.</p>
+            </div>
+            <button id="start-btn" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-2xl shadow-[0_4px_0_#1d4ed8] active:shadow-[0_0px_0_#1d4ed8] active:translate-y-1 transition-all">
+                FIGHT
+            </button>
+        </div>
+
+        <!-- HUD -->
+        <div id="hud" class="hidden w-full p-4 flex justify-between items-start text-white text-xl font-bold text-shadow-md">
+            <div>
+                <div class="mb-1 text-sm text-gray-300">ENERGY</div>
+                <div class="health-bar-container shadow-lg">
+                    <div id="player-hp-bar" class="health-bar-fill"></div>
+                </div>
+                <div id="score-display" class="mt-2 text-yellow-400">Score: 0</div>
+            </div>
+            <div class="text-right">
+                <div id="wave-display" class="text-3xl text-blue-400">OPPONENT 1</div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 pointer-events-auto z-50">
+            <h1 class="text-6xl font-black text-red-500 mb-4">KNOCKED OUT</h1>
+            <p id="final-stats" class="text-white text-2xl mb-8">Defeated X opponents | Score: Y</p>
+
+            <button id="restart-btn" class="px-8 py-4 bg-white text-black hover:bg-gray-200 font-bold rounded-lg text-xl transition-colors">
+                REMATCH
+            </button>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div id="mobile-controls">
+            <div class="btn-group">
+                <div class="control-btn" id="btn-left">←</div>
+                <div class="control-btn" id="btn-right">→</div>
+                <div class="control-btn" id="btn-down">↓</div>
+            </div>
+            <div class="btn-group">
+                <div class="control-btn" id="btn-jump">↑</div>
+                <div class="control-btn" id="btn-attack" style="background: rgba(59, 130, 246, 0.4); border-color: #3b82f6;">⚔</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * Math Brawler 1v1 - Complete Game Engine
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// UI Elements
+const mainMenu = document.getElementById('main-menu');
+const hud = document.getElementById('hud');
+const gameOverScreen = document.getElementById('game-over');
+const startBtn = document.getElementById('start-btn');
+const restartBtn = document.getElementById('restart-btn');
+const playerHpBar = document.getElementById('player-hp-bar');
+const waveDisplay = document.getElementById('wave-display');
+const scoreDisplay = document.getElementById('score-display');
+const finalStats = document.getElementById('final-stats');
+
+// Game State
+let gameState = 'MENU';
+let gameTime = 0;
+let lastTime = 0;
+let screenShake = 0;
+
+// Timer State
+let isQuestionActive = false;
+let isTimeOutFrozen = false;
+let questionTimer = 0;
+let maxQuestionTime = 15000;
+let countdownStep = 0;
+let countdownTimerMs = 0;
+
+// Entities
+let player;
+let currentEnemy = null;
+let orbs = [];
+let particles = [];
+let deadBodies = [];
+let tennisBalls = [];
+let activeLightnings = [];
+
+// Game Variables
+let enemiesDefeated = 0;
+let score = 0;
+const gravity = 0.5;
+let floorY = 0;
+
+// Input State
+const keys = { left: false, right: false, up: false, down: false, attack: false };
+let prevKeys = { left: false, right: false, up: false, down: false, attack: false };
+
+// Resize Canvas
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    floorY = canvas.height - 100;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- INPUT HANDLING ---
+window.addEventListener('keydown', (e) => {
+    if(e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = true;
+    if(e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = true;
+    if(e.code === 'KeyW' || e.code === 'ArrowUp') keys.up = true;
+    if(e.code === 'KeyS' || e.code === 'ArrowDown') keys.down = true;
+    if(e.code === 'Space' || e.code === 'KeyF' || e.code === 'Enter') keys.attack = true;
+});
+
+window.addEventListener('keyup', (e) => {
+    if(e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = false;
+    if(e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = false;
+    if(e.code === 'KeyW' || e.code === 'ArrowUp') keys.up = false;
+    if(e.code === 'KeyS' || e.code === 'ArrowDown') keys.down = false;
+    if(e.code === 'Space' || e.code === 'KeyF' || e.code === 'Enter') keys.attack = false;
+});
+
+// Touch Controls
+const addTouch = (id, keyName) => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+        el.addEventListener('touchcancel', (e) => { e.preventDefault(); keys[keyName] = false; });
+    }
+};
+addTouch('btn-left', 'left');
+addTouch('btn-right', 'right');
+addTouch('btn-down', 'down');
+addTouch('btn-jump', 'up');
+addTouch('btn-attack', 'attack');
+
+// --- UTILS ---
+function generateMathQuestion(isHard = false) {
+    let isAdd = Math.random() > 0.5;
+    let a, b, ans;
+    let maxNum = 20;
+
+    if (isAdd) {
+        ans = Math.floor(Math.random() * (maxNum + 1));
+        a = Math.floor(Math.random() * (ans + 1));
+        b = ans - a;
+    } else {
+        a = Math.floor(Math.random() * (maxNum + 1));
+        b = Math.floor(Math.random() * (a + 1));
+        ans = a - b;
+    }
+    
+    let options = [ans];
+    let maxRand = 20;
+    while(options.length < 3) {
+        let wrong = Math.floor(Math.random() * (maxRand + 1));
+        if (!options.includes(wrong)) options.push(wrong);
+    }
+    // Shuffle options
+    options.sort(() => Math.random() - 0.5);
+    
+    let text = `${a} ${isAdd ? '+' : '-'} ${b} = ?`;
+    return { text: text, answer: ans, options: options };
+}
+
+// --- CLASSES ---
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 12;
+        this.vy = (Math.random() - 1) * 12;
+        this.life = 1.0;
+        this.decay = Math.random() * 0.02 + 0.02;
+        this.color = color;
+        this.size = Math.random() * 5 + 2;
+    }
+    update() {
+        this.vy += gravity;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class TennisBall {
+    constructor(x, y, vx, isPlayer) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = -3; 
+        this.isPlayer = isPlayer;
+        this.radius = 8;
+        this.life = 1;
+    }
+    update() {
+        this.vy += gravity * 0.4; // floaty feel
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.y > floorY) {
+            this.vy *= -0.8; 
+            this.y = floorY;
+            this.vx *= 0.8;
+        }
+        if (this.x < 0 || this.x > canvas.width || Math.abs(this.vx) < 0.1) this.life = 0;
+    }
+    draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = '#eab308'; // Tennis ball yellow
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Tennis ball line details
+        ctx.beginPath();
+        ctx.arc(this.x - 4, this.y, 6, -Math.PI/2, Math.PI/2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(this.x + 4, this.y, 6, Math.PI/2, Math.PI * 1.5);
+        ctx.stroke();
+    }
+}
+
+class AnswerOrb {
+    constructor(value, x, y, isBoss = false) {
+        this.value = value;
+        this.x = x;
+        this.y = y;
+        
+        // Non-bosses float slowly (0.8), Bosses float fast (2.5)
+        let speed = isBoss ? 2.5 : 0.8;
+        this.vx = (Math.random() > 0.5 ? speed : -speed);
+        this.vy = (Math.random() > 0.5 ? speed : -speed);
+        
+        this.state = 'floating'; // floating, homing
+        this.target = null;
+        this.radius = 24;
+        this.life = 1; 
+        this.baseY = y;
+        this.isMoving = true;
+    }
+
+    update() {
+        if (this.state === 'floating') {
+            // Orbs constantly float around the screen
+            this.x += this.vx;
+            this.y += this.vy;
+            
+            // Bounce off edges gently
+            if (this.x < this.radius || this.x > canvas.width - this.radius) this.vx *= -1;
+            if (this.y < 50 || this.y > floorY - this.radius - 80) this.vy *= -1;
+            
+        } else if (this.state === 'homing') {
+            if (this.target && this.target.hp > 0) {
+                let dx = this.target.x - this.x;
+                let dy = (this.target.y - (this.target.height * this.target.scale)/2) - this.y;
+                let dist = Math.hypot(dx, dy);
+                
+                if (dist < 40) {
+                    // Hit Enemy
+                    this.target.takeDamage(1, this.vx > 0 ? 1 : -1);
+                    score += 20;
+                    scoreDisplay.innerText = `Score: ${score}`;
+                    screenShake = 10;
+                    this.life = 0;
+                    
+                    for(let i=0; i<15; i++) {
+                        particles.push(new Particle(this.target.x, this.target.y - 40, '#fbbf24'));
+                    }
+
+                    if (this.target.hp > 0) {
+                        setTimeout(() => { if (gameState === 'PLAYING') spawnQuestion(false); }, 800);
+                    } else {
+                        score += 100 * this.target.scale;
+                        scoreDisplay.innerText = `Score: ${score}`;
+                        setTimeout(() => { if (gameState === 'PLAYING') spawnNewEnemy(); }, 1500);
+                    }
+
+                } else {
+                    this.vx = (dx / dist) * 22;
+                    this.vy = (dy / dist) * 22;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if (Math.random() < 0.5) particles.push(new Particle(this.x, this.y, '#eab308'));
+                }
+            } else {
+                this.life = 0;
+            }
+        }
+    }
+
+    draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        if (this.state === 'homing') {
+            // Morph into a fast-moving tennis ball visually
+            ctx.beginPath();
+            ctx.arc(0, 0, 14, 0, Math.PI * 2);
+            ctx.fillStyle = '#eab308';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(-8, 0, 10, -Math.PI/2, Math.PI/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(8, 0, 10, Math.PI/2, Math.PI * 1.5);
+            ctx.stroke();
+        } else {
+            // Draw regular math orb
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#1e3a8a'; 
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#60a5fa';
+            ctx.stroke();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.value, 0, 2);
+        }
+        
+        ctx.restore();
+    }
+}
+
+class Entity {
+    constructor(x, y, isPlayer = false, scale = 1.0, isBoss = false) {
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.width = 30;
+        this.height = 70;
+        this.isPlayer = isPlayer;
+        this.scale = scale;
+        this.isBoss = isBoss;
+        
+        if (isPlayer) {
+            this.maxHp = 100;
+        } else {
+            if (isBoss) this.maxHp = 5;
+            else if (scale >= 1.5) this.maxHp = 3;
+            else if (scale >= 1.2) this.maxHp = 2;
+            else this.maxHp = 1;
+        }
+        
+        this.hp = this.maxHp;
+        this.dir = isPlayer ? 1 : -1;
+        this.state = 'idle';
+        this.stateTimer = 0;
+        
+        this.speed = isPlayer ? 7 : 3;
+        this.jumpForce = 14;
+        this.color = isPlayer ? '#ffffff' : '#ef4444';
+        
+        this.attackCooldown = 0;
+        this.stunTimer = 0;
+        this.attackRange = 60;
+        this.shieldTimer = 0;
+        
+        this.jumpCount = 0;
+        this.maxJumps = 2;
+        this.isCrouching = false;
+
+        this.problem = "";
+        this.answer = -1;
+        
+        this.cosmetics = isPlayer ? null : {
+            hat: Math.random() > 0.5,
+            glasses: Math.random() > 0.5,
+            hair: Math.random() > 0.5,
+            shoes: Math.random() > 0.5
+        };
+        if (this.cosmetics && this.cosmetics.hat) this.cosmetics.hair = false; 
+    }
+
+    update() {
+        if (this.hp <= 0) return;
+
+        this.vy += gravity;
+        
+        if (this.shieldTimer > 0) this.shieldTimer--;
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (this.stunTimer > 0) this.stunTimer--;
+
+        if (this.stunTimer === 0) {
+            this.x += this.vx;
+            this.vx *= 0.8; 
+            if (Math.abs(this.vx) < 0.1) this.vx = 0;
+        } else {
+            this.x += this.vx;
+            this.vx *= 0.95;
+        }
+
+        this.y += this.vy;
+
+        if (this.y > floorY) {
+            this.y = floorY;
+            this.vy = 0;
+            this.jumpCount = 0;
+        }
+
+        if (this.stunTimer > 0) {
+            this.state = 'hit';
+        } else if (this.state === 'attack') {
+            if (this.stateTimer > 15) {
+                this.state = 'idle';
+            }
+        } else {
+            if (this.y < floorY) {
+                this.state = this.vy < 0 ? 'jump' : 'fall';
+            } else if (Math.abs(this.vx) > 1) {
+                this.state = 'run';
+            } else {
+                this.state = 'idle';
+            }
+        }
+
+        if (this.isPlayer) {
+            if (this.x < 30) this.x = 30;
+            if (this.x > canvas.width - 30) this.x = canvas.width - 30;
+        }
+
+        this.stateTimer++;
+    }
+
+    attack() {
+        if (this.attackCooldown <= 0 && this.stunTimer <= 0 && this.state !== 'attack') {
+            this.state = 'attack';
+            this.stateTimer = 0;
+            this.attackCooldown = 15; 
+            
+            if (this.isPlayer) {
+                // Melee hit detection on Orbs
+                let wScaled = this.attackRange * this.scale;
+                let hitArea = {
+                    x: this.dir === 1 ? this.x : this.x - wScaled,
+                    y: this.y - (this.height * this.scale) - 20, 
+                    w: wScaled,
+                    h: this.height * this.scale + 20
+                };
+
+                orbs.forEach(orb => {
+                    if (orb.state !== 'floating') return;
+                    
+                    if (hitArea.x < orb.x + orb.radius &&
+                        hitArea.x + hitArea.w > orb.x - orb.radius &&
+                        hitArea.y < orb.y + orb.radius &&
+                        hitArea.y + hitArea.h > orb.y - orb.radius) {
+                        
+                        if (currentEnemy && orb.value === currentEnemy.answer) {
+                            // CORRECT
+                            isQuestionActive = false; 
+                            if (isTimeOutFrozen) {
+                                // Shielded Lightning Block (Only 5 damage!)
+                                this.takeDamage(5, 0, true); 
+                                screenShake = 15;
+                                activeLightnings.push({x: this.x, life: 15});
+                            }
+                            isTimeOutFrozen = false;
+                            orb.state = 'homing';
+                            orb.target = currentEnemy;
+                            screenShake = 3;
+                            orbs = orbs.filter(o => o === orb);
+                        } else {
+                            // WRONG: Orb explodes, and a LIGHTNING STRIKE hits the player
+                            isQuestionActive = false;
+                            isTimeOutFrozen = false;
+                            orb.life = 0; 
+                            
+                            // Orb explosion
+                            for(let i=0; i<15; i++) particles.push(new Particle(orb.x, orb.y, '#ef4444'));
+                            
+                            // Normal Lightning Strike penalty (20 damage)
+                            this.takeDamage(20, 0, false); 
+                            screenShake = 30;
+                            activeLightnings.push({x: this.x, life: 15});
+                            for(let i=0; i<20; i++) particles.push(new Particle(this.x, this.y, '#fef08a'));
+                            
+                            setTimeout(() => { if (gameState === 'PLAYING') spawnQuestion(false); }, 1200);
+                            orbs = []; 
+                        }
+                    }
+                });
+            } else {
+                // Enemy shoots a slow tennis ball towards the player
+                let spawnX = this.dir === 1 ? this.x + 20 : this.x - 20;
+                let spawnY = this.y - (this.height * this.scale) * 0.6;
+                tennisBalls.push(new TennisBall(spawnX, spawnY, this.dir * 5.5, this.isPlayer));
+            }
+        }
+    }
+
+    takeDamage(amount, fromDir, isShielded = false) {
+        this.hp -= amount;
+        this.stunTimer = isShielded ? 5 : 15;
+        this.vy = isShielded ? -2 : -5; 
+        this.vx = isShielded ? fromDir * 2 : fromDir * 8; 
+        
+        if (isShielded) this.shieldTimer = 30; // Visually show the shield
+        
+        for(let i=0; i<10; i++) {
+            particles.push(new Particle(this.x, this.y - (this.height * this.scale)/2, isShielded ? '#60a5fa' : (this.isPlayer ? '#ef4444' : '#fbbf24')));
+        }
+
+        if (this.isPlayer) {
+            updateHealthBar();
+        }
+
+        if (this.hp <= 0) {
+            this.die();
+        }
+    }
+
+    die() {
+        this.hp = 0;
+        if (!this.isPlayer) {
+            deadBodies.push({
+                x: this.x, y: floorY, dir: this.dir, scale: this.scale
+            });
+            if(deadBodies.length > 5) deadBodies.shift(); 
+            enemiesDefeated++;
+            
+            // Decrease the time limit gradually as you defeat enemies
+            maxQuestionTime = Math.max(3000, 15000 - (enemiesDefeated * 1000));
+        }
+    }
+
+    draw(ctx, time) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Draw Math Problem & HP
+        if (!this.isPlayer && this.hp > 0 && (isQuestionActive || gameState === 'COUNTDOWN' || isTimeOutFrozen)) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px monospace';
+            ctx.textAlign = 'center';
+            
+            let visualY = -(this.height * this.scale) - 80;
+
+            let textWidth = ctx.measureText(this.problem).width;
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(-textWidth/2 - 10, visualY - 20, textWidth + 20, 32);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-textWidth/2 - 10, visualY - 20, textWidth + 20, 32);
+            
+            ctx.fillStyle = '#60a5fa'; 
+            ctx.fillText(this.problem, 0, visualY + 4);
+
+            // Draw HP (Punches left)
+            let hpW = 40;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-hpW/2, visualY - 35, hpW, 6);
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(-hpW/2, visualY - 35, hpW * (this.hp/this.maxHp), 6);
+        }
+
+        // Apply scale & direction
+        let crouchScale = this.isCrouching ? 0.6 : 1.0;
+        ctx.scale(this.dir * this.scale, this.scale * crouchScale); 
+
+        ctx.strokeStyle = (this.state === 'hit' && time % 0.2 < 0.1) ? '#ffffff' : this.color; 
+        ctx.lineWidth = 4 / this.scale; // Maintain line thickness
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Procedural Stickman
+        const pivotY = -this.height + 10; 
+        const shoulderY = pivotY + 15;
+        const pelvisY = pivotY + 35;
+
+        let lArmRot=0, rArmRot=0, lLegRot=0, rLegRot=0;
+        let headOffset = 0;
+
+        if (this.state === 'run') {
+            const runCycle = time * 0.015 * (this.isPlayer ? 1 : 0.6);
+            lLegRot = Math.sin(runCycle) * 0.8;
+            rLegRot = Math.sin(runCycle + Math.PI) * 0.8;
+            lArmRot = Math.sin(runCycle + Math.PI) * 0.8;
+            rArmRot = Math.sin(runCycle) * 0.8;
+            headOffset = Math.abs(Math.sin(runCycle*2)) * 2;
+        } else if (this.state === 'jump') {
+            lLegRot = -0.2; rLegRot = 0.5; lArmRot = 2.5; rArmRot = 2.0;
+        } else if (this.state === 'fall') {
+            lLegRot = 0.2; rLegRot = -0.5; lArmRot = 0.5; rArmRot = 0.8;
+        } else if (this.state === 'hit') {
+            lLegRot = 0.5; rLegRot = 0.8; lArmRot = 1.5; rArmRot = -1.5;
+            ctx.rotate(-0.5); 
+        }
+
+        if (this.state === 'attack') {
+            let p = this.stateTimer / 15;
+            if (p < 0.3) { rArmRot = -Math.PI/2 + p; } 
+            else if (p < 0.6) { rArmRot = -Math.PI/2 - (p-0.3)*3; } 
+            else { rArmRot = -Math.PI - (1-p); }
+            lArmRot = Math.PI/4; 
+        }
+
+        // Head
+        ctx.beginPath();
+        ctx.arc(0, pivotY + headOffset, 10, 0, Math.PI * 2);
+        if(!this.isPlayer) { ctx.fillStyle = '#ef4444'; ctx.fill(); } 
+        else { ctx.stroke(); }
+
+        // Cosmetics
+        if (this.cosmetics) {
+            if (this.cosmetics.glasses) {
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2 / this.scale;
+                ctx.beginPath();
+                ctx.arc(3, pivotY + headOffset, 3, 0, Math.PI*2);
+                ctx.arc(9, pivotY + headOffset, 3, 0, Math.PI*2);
+                ctx.moveTo(6, pivotY + headOffset);
+                ctx.lineTo(6, pivotY + headOffset);
+                ctx.stroke();
+            }
+            if (this.cosmetics.hat) {
+                ctx.fillStyle = '#3b82f6'; 
+                ctx.fillRect(-8, pivotY + headOffset - 14, 16, 8);
+                ctx.fillRect(-8, pivotY + headOffset - 6, 24, 2); 
+            } else if (this.cosmetics.hair) {
+                ctx.strokeStyle = '#f59e0b'; 
+                ctx.lineWidth = 2 / this.scale;
+                ctx.beginPath();
+                for(let i=-6; i<=6; i+=3) {
+                    ctx.moveTo(i, pivotY + headOffset - 8);
+                    ctx.lineTo(i + (Math.random()*4-2), pivotY + headOffset - 16);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // Spine
+        ctx.beginPath();
+        ctx.moveTo(0, pivotY + 10 + headOffset);
+        ctx.lineTo(0, pelvisY);
+        ctx.stroke();
+
+        const drawLimb = (startX, startY, angle, length, joints = false, isLeg = false) => {
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            let endX = startX + Math.sin(angle) * length;
+            let endY = startY + Math.cos(angle) * length;
+            if(joints) {
+                let midX = startX + Math.sin(angle) * (length/2) + 5; 
+                let midY = startY + Math.cos(angle) * (length/2);
+                ctx.lineTo(midX, midY);
+            }
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            
+            if (isLeg && this.cosmetics && this.cosmetics.shoes) {
+                ctx.fillStyle = '#10b981';
+                ctx.fillRect(endX - 6, endY - 2, 12, 6);
+            }
+            
+            return {x: endX, y: endY};
+        };
+
+        const drawRacket = (racketX, racketY, angle) => {
+             ctx.save();
+             ctx.translate(racketX, racketY);
+             ctx.rotate(angle);
+             
+             ctx.strokeStyle = '#9ca3af';
+             ctx.lineWidth = 4 / this.scale;
+             ctx.beginPath();
+             ctx.moveTo(0, 0);
+             ctx.lineTo(15, 0);
+             ctx.stroke();
+             
+             ctx.strokeStyle = this.isPlayer ? '#3b82f6' : '#ef4444';
+             ctx.beginPath();
+             ctx.ellipse(25, 0, 10, 15, 0, 0, Math.PI*2);
+             ctx.stroke();
+             
+             ctx.strokeStyle = '#ffffff';
+             ctx.lineWidth = 1 / this.scale;
+             ctx.beginPath();
+             ctx.moveTo(25, -15); ctx.lineTo(25, 15);
+             ctx.moveTo(20, -12); ctx.lineTo(20, 12);
+             ctx.moveTo(30, -12); ctx.lineTo(30, 12);
+             ctx.moveTo(15, 0); ctx.lineTo(35, 0);
+             ctx.moveTo(18, -6); ctx.lineTo(32, -6);
+             ctx.moveTo(18, 6); ctx.lineTo(32, 6);
+             ctx.stroke();
+             
+             ctx.restore();
+        };
+
+        // Back Limbs
+        ctx.strokeStyle = this.isPlayer ? '#aaaaaa' : '#991b1b';
+        drawLimb(0, pelvisY, lLegRot, 35, true, true);
+        drawLimb(0, shoulderY, lArmRot, 25, true, false);
+
+        // Front Limbs
+        ctx.strokeStyle = (this.state === 'hit' && time % 0.2 < 0.1) ? '#ffffff' : this.color; 
+        drawLimb(0, pelvisY, rLegRot, 35, true, true);
+        
+        let rArmEnd = drawLimb(0, shoulderY, rArmRot, 25, true, false);
+        
+        // Racket logic
+        let racketAngle = -rArmRot + Math.PI/2;
+        if (this.state === 'attack') {
+            racketAngle -= Math.PI/2; // Swung forward
+        }
+        drawRacket(rArmEnd.x, rArmEnd.y, racketAngle);
+        
+        // Draw Shield Overlay
+        if (this.shieldTimer > 0) {
+            ctx.beginPath();
+            ctx.arc(0, -this.height * 0.4, this.height * 0.9, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+            ctx.fill();
+            ctx.lineWidth = 3 / this.scale;
+            ctx.strokeStyle = '#60a5fa';
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+}
+
+// --- GAME LOGIC ---
+
+function initGame() {
+    player = new Entity(canvas.width * 0.2, floorY, true, 1);
+    currentEnemy = null;
+    orbs = [];
+    particles = [];
+    deadBodies = [];
+    tennisBalls = [];
+    activeLightnings = [];
+    enemiesDefeated = 0;
+    score = 0;
+    maxQuestionTime = 15000;
+    isTimeOutFrozen = false;
+    
+    scoreDisplay.innerText = `Score: ${score}`;
+    waveDisplay.innerText = `OPPONENT 1`;
+    updateHealthBar();
+
+    gameState = 'PLAYING';
+    mainMenu.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    hud.classList.remove('hidden');
+
+    spawnNewEnemy();
+}
+
+function spawnNewEnemy() {
+    if (gameState !== 'PLAYING' && gameState !== 'COUNTDOWN') return;
+
+    let enemyNumber = enemiesDefeated + 1;
+    let isBoss = (enemyNumber % 5 === 0);
+    
+    // Progressive scale: grows steadily, then massive for Boss
+    let scale = isBoss ? 2.5 : 1.0 + ((enemyNumber - 1) % 5) * 0.15;
+
+    currentEnemy = new Entity(canvas.width * 0.8, floorY, false, scale, isBoss);
+    waveDisplay.innerText = isBoss ? `BOSS ${Math.floor(enemyNumber / 5)}` : `OPPONENT ${enemyNumber}`;
+    waveDisplay.style.color = isBoss ? '#ef4444' : '#60a5fa'; // Red for boss, blue for normal
+    
+    // Pass 'true' to trigger the countdown for a new enemy
+    setTimeout(() => { if (gameState === 'PLAYING' || gameState === 'COUNTDOWN') spawnQuestion(true); }, 1000);
+}
+
+function spawnQuestion(withCountdown = false) {
+    if (!currentEnemy || currentEnemy.hp <= 0 || (gameState !== 'PLAYING' && gameState !== 'COUNTDOWN')) return;
+
+    let isBoss = currentEnemy.isBoss;
+    let prob = generateMathQuestion(isBoss);
+    currentEnemy.problem = prob.text;
+    currentEnemy.answer = prob.answer;
+    
+    orbs = [];
+    let xs = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+    
+    for(let i=0; i<3; i++) {
+        // Random different heights for answers
+        let randomY = floorY - 100 - Math.random() * 150; 
+        orbs.push(new AnswerOrb(prob.options[i], xs[i], randomY, isBoss));
+    }
+
+    isTimeOutFrozen = false;
+    
+    if (withCountdown) {
+        isQuestionActive = false; // Will activate after GO!
+        // Start Countdown
+        gameState = 'COUNTDOWN';
+        countdownStep = 3;
+        countdownTimerMs = 800; // 800ms per step feels punchy
+    } else {
+        // Skip countdown, immediately start question
+        isQuestionActive = true;
+        gameState = 'PLAYING';
+        questionTimer = maxQuestionTime;
+        if (currentEnemy) currentEnemy.shootTimer = 500 + Math.random() * 1000;
+    }
+}
+
+function updateHealthBar() {
+    if (!player) return;
+    let pct = Math.max(0, (player.hp / player.maxHp) * 100);
+    playerHpBar.style.width = `${pct}%`;
+}
+
+function update(dt) {
+    if (gameState !== 'PLAYING' && gameState !== 'COUNTDOWN') return;
+
+    gameTime += dt;
+
+    if (screenShake > 0) {
+        screenShake *= 0.9;
+        if (screenShake < 0.5) screenShake = 0;
+    }
+
+    // Process Countdown
+    if (gameState === 'COUNTDOWN') {
+        countdownTimerMs -= dt;
+        if (countdownTimerMs <= 0) {
+            countdownStep--;
+            countdownTimerMs = 800;
+            if (countdownStep < 0) {
+                gameState = 'PLAYING';
+                isQuestionActive = true;
+                questionTimer = maxQuestionTime;
+                if (currentEnemy) currentEnemy.shootTimer = 500 + Math.random() * 1000;
+            }
+        }
+    }
+
+    // Input - Player can always move
+    if (player.stunTimer === 0 && player.hp > 0) {
+        player.isCrouching = (keys.down && player.y === floorY);
+
+        if (!player.isCrouching) {
+            if (keys.left) { player.vx = -player.speed; player.dir = -1; }
+            if (keys.right) { player.vx = player.speed; player.dir = 1; }
+        } else {
+            player.vx *= 0.5; // Slide to a halt when crouching
+        }
+        
+        let justPressedUp = keys.up && !prevKeys.up;
+        if (justPressedUp) {
+            if (player.y === floorY) { 
+                player.vy = -player.jumpForce; 
+                player.jumpCount = 1;
+            } else if (player.jumpCount < player.maxJumps) {
+                player.vy = -player.jumpForce; 
+                player.jumpCount++;
+                for(let i=0; i<5; i++) particles.push(new Particle(player.x, player.y, '#ffffff'));
+            }
+        }
+        
+        // Only attack when playing (prevent cheating during countdown)
+        if (keys.attack && gameState === 'PLAYING') { player.attack(); }
+    }
+
+    player.update();
+    
+    if (player.hp <= 0 && (gameState === 'PLAYING' || gameState === 'COUNTDOWN')) {
+        gameState = 'GAMEOVER';
+        isQuestionActive = false;
+        setTimeout(() => {
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            finalStats.innerText = `Defeated ${enemiesDefeated} opponents | Score: ${score}`;
+        }, 1500);
+    }
+
+    // Question Timer Logic
+    if (isQuestionActive && currentEnemy && currentEnemy.hp > 0 && !isTimeOutFrozen) {
+        questionTimer -= dt;
+        if (questionTimer <= 0) {
+            // Trigger Freeze State!
+            isTimeOutFrozen = true;
+            questionTimer = 0; // Lock at zero
+        }
+    }
+
+    // Update Enemy AI
+    if (currentEnemy) {
+        if (!isTimeOutFrozen && gameState === 'PLAYING') {
+            if (currentEnemy.stunTimer === 0 && currentEnemy.hp > 0) {
+                // Face the player
+                currentEnemy.dir = (player.x > currentEnemy.x) ? 1 : -1;
+
+                // AI Movement Logic
+                if (currentEnemy.aiTargetX === undefined) {
+                    currentEnemy.aiTargetX = canvas.width * 0.8;
+                    currentEnemy.aiWaitTimer = 0;
+                }
+
+                if (currentEnemy.aiWaitTimer > 0) {
+                    currentEnemy.aiWaitTimer -= dt;
+                } else {
+                    let dist = Math.abs(currentEnemy.x - currentEnemy.aiTargetX);
+                    if (dist < 30) {
+                        // Reached target, wait a bit, then pick a new spot on the right half of the screen
+                        currentEnemy.aiTargetX = canvas.width * 0.4 + Math.random() * (canvas.width * 0.5);
+                        currentEnemy.aiWaitTimer = 500 + Math.random() * 1000;
+                    } else {
+                        // Move towards target
+                        currentEnemy.vx = (currentEnemy.aiTargetX > currentEnemy.x ? 1 : -1) * (currentEnemy.speed * 0.7);
+                        
+                        // Random Jump
+                        if (currentEnemy.y === floorY && Math.random() < 0.015) {
+                            currentEnemy.vy = -currentEnemy.jumpForce * (0.8 + Math.random() * 0.3);
+                        }
+                    }
+                }
+
+                // Enemy randomly shoots dodgeable balls
+                if (isQuestionActive) {
+                    if (currentEnemy.shootTimer === undefined) currentEnemy.shootTimer = 1000;
+                    currentEnemy.shootTimer -= dt;
+                    if (currentEnemy.shootTimer <= 0) {
+                        currentEnemy.attack(); // Shoots the slow ball
+                        currentEnemy.shootTimer = 1000 + Math.random() * 1500; // Next shot in 1 to 2.5 secs
+                    }
+                }
+            }
+            currentEnemy.update();
+        } else {
+            // If frozen, just update physics and state timers, but don't walk or shoot
+            currentEnemy.vx = 0;
+            currentEnemy.update();
+        }
+    }
+
+    // Update Tennis Balls (Dodging)
+    if (!isTimeOutFrozen) {
+        for (let i = tennisBalls.length - 1; i >= 0; i--) {
+            let ball = tennisBalls[i];
+            ball.update();
+            
+            // Check if ball hits player
+            if (player.hp > 0 && ball.life > 0) {
+                let pHeight = player.isCrouching ? player.height * 0.6 : player.height;
+                let px = player.x;
+                let py = player.y - pHeight/2;
+                
+                // Hitbox check
+                if (Math.abs(ball.x - px) < player.width*0.8 && Math.abs(ball.y - py) < pHeight*0.8) {
+                    ball.life = 0;
+                    player.takeDamage(10, ball.vx > 0 ? 1 : -1);
+                    screenShake = 10;
+                }
+            }
+
+            if (ball.life <= 0) tennisBalls.splice(i, 1);
+        }
+    }
+
+    // Update Orbs & Particles
+    for (let i = orbs.length - 1; i >= 0; i--) {
+        orbs[i].update();
+        if (orbs[i].life <= 0) orbs.splice(i, 1);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+
+    // Update Lightnings
+    for (let i = activeLightnings.length - 1; i >= 0; i--) {
+        activeLightnings[i].life--;
+        if (activeLightnings[i].life <= 0) activeLightnings.splice(i, 1);
+    }
+    
+    prevKeys = { ...keys };
+}
+
+function drawBackground() {
+    ctx.fillStyle = '#1e293b'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.save();
+    
+    let shakeX = (Math.random() - 0.5) * screenShake;
+    let shakeY = (Math.random() - 0.5) * screenShake;
+    ctx.translate(shakeX, shakeY);
+
+    // Floor
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, floorY, canvas.width, canvas.height - floorY);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY);
+    ctx.lineTo(canvas.width, floorY);
+    ctx.stroke();
+
+    // Dead Bodies
+    deadBodies.forEach(body => {
+        ctx.save();
+        ctx.translate(body.x, body.y);
+        ctx.scale(body.dir * body.scale, body.scale);
+        ctx.strokeStyle = '#7f1d1d'; 
+        ctx.lineWidth = 4 / body.scale;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-15, 0); ctx.lineTo(15, 0); 
+        ctx.moveTo(15, 0); ctx.arc(20, -3, 6, 0, Math.PI*2); 
+        ctx.moveTo(-5, 0); ctx.lineTo(-10, -10); 
+        ctx.moveTo(5, 0); ctx.lineTo(15, -15); 
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    // Draw Lightnings
+    activeLightnings.forEach(lightning => {
+        ctx.save();
+        ctx.globalAlpha = lightning.life / 15;
+        ctx.strokeStyle = '#fef08a'; // Bright yellow
+        ctx.lineWidth = 5 + Math.random() * 5;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#fef08a';
+        
+        ctx.beginPath();
+        ctx.moveTo(lightning.x, 0);
+        let currentY = 0;
+        let currentX = lightning.x;
+        while(currentY < floorY) {
+            currentX += (Math.random() - 0.5) * 60;
+            currentY += 20 + Math.random() * 40;
+            ctx.lineTo(currentX, currentY);
+        }
+        ctx.stroke();
+        
+        // White hot core
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    if (currentEnemy && currentEnemy.hp > 0) currentEnemy.draw(ctx, gameTime);
+    
+    if (player) {
+        if (player.hp > 0 || player.vy < 0 || player.y < floorY) {
+            player.draw(ctx, gameTime);
+        } else {
+             ctx.save();
+             ctx.translate(player.x, floorY);
+             ctx.strokeStyle = '#ffffff';
+             ctx.lineWidth = 4;
+             ctx.beginPath();
+             ctx.moveTo(-20, 0); ctx.lineTo(20, 0);
+             ctx.arc(25, -5, 8, 0, Math.PI*2);
+             ctx.stroke();
+             ctx.restore();
+        }
+    }
+
+    tennisBalls.forEach(ball => ball.draw(ctx));
+    orbs.forEach(orb => orb.draw(ctx));
+    particles.forEach(p => p.draw(ctx));
+    
+    // Draw Countdown
+    if (gameState === 'COUNTDOWN') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 120px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        let text = countdownStep === 0 ? "GO!!!" : countdownStep.toString();
+        let scale = 1 + (800 - countdownTimerMs) / 800 * 0.5;
+        
+        if (countdownStep === 0) {
+            ctx.fillStyle = '#fef08a'; // Bright yellow for GO
+            scale = 1 + (800 - countdownTimerMs) / 800; // Bigger pop
+        }
+        
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 5;
+        ctx.shadowOffsetY = 5;
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2 - 50);
+        ctx.scale(scale, scale);
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+    }
+
+    // Draw Timer Bar
+    if (isQuestionActive || isTimeOutFrozen || gameState === 'COUNTDOWN') {
+        let barW = 300;
+        let barX = canvas.width/2 - barW/2;
+        let barY = 80;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(barX, barY, barW, 12);
+        
+        if (gameState === 'COUNTDOWN') {
+            // Waiting bar
+            ctx.fillStyle = '#94a3b8'; // Slate 400
+            ctx.fillRect(barX, barY, barW, 12);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("GET READY...", canvas.width/2, barY - 10);
+        } else if (!isTimeOutFrozen) {
+            let pct = Math.max(0, questionTimer / maxQuestionTime);
+            ctx.fillStyle = pct > 0.3 ? '#3b82f6' : '#ef4444';
+            ctx.fillRect(barX, barY, barW * pct, 12);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("TIME TO ANSWER", canvas.width/2, barY - 10);
+        } else {
+            // Flash red when frozen
+            if (Math.floor(gameTime / 150) % 2 === 0) {
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(barX, barY, barW, 12);
+            }
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("TIME'S UP! CHOOSE TO SURVIVE!", canvas.width/2, barY - 10);
+        }
+    }
+
+    ctx.restore();
+}
+
+function gameLoop(timestamp) {
+    let dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    if (dt > 100) dt = 16;
+
+    update(dt);
+    drawBackground();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Event Listeners
+startBtn.addEventListener('click', initGame);
+restartBtn.addEventListener('click', initGame);
+
+// Initial Draw
+drawBackground();
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
