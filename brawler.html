@@ -322,12 +322,6 @@ function generateMathQuestion(isHard = false) {
         document.getElementById('op-add').checked = true;
     }
 
-    // Boss math problems stay exactly the same (Addition/Subtraction 0-20)
-    if (isHard) {
-        maxNum = 20;
-        ops = ['+', '-'];
-    }
-
     let operation = ops[Math.floor(Math.random() * ops.length)];
     let a, b, ans;
 
